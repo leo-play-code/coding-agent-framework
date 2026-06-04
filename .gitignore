@@ -1,0 +1,15 @@
+# 各專案是獨立 git repo,不納入框架(由 bootstrap 各自 clone)
+projects/
+
+# 依賴 / 快取
+node_modules/
+__pycache__/
+*.py[cod]
+
+# 密鑰(保留 .env.example)
+.env
+.env.*
+!.env.example
+
+# 系統
+.DS_Store
