@@ -50,6 +50,10 @@
 8. **文件基準化**(僅限**重構 / 加 feature**):這兩種情境前先呼叫 `doc-baseline` skill 確保具備 `srs.md` + TOGAF A–H。**缺 → 逆向工程補齊;格式不對 → 正規化取代(先確認 + 備份 `.bak`)**;已符合則略過。
 9. **PRD = 目標 (Target) 的單一真實來源**(新專案 / 重構 / 加 feature):`/spec` 之後、TOGAF 之前,呼叫 **`prd`** skill(依 `templates/prd/` 產出分層 PRD 到專案 `docs/prd/`)。**srs.md=現況、PRD=目標**,TOGAF 各階段的 Target 引用 PRD(不重抄)。新專案 / 重構填**全套**;加 feature 只填**受影響的層**(子集);**debug 不產 PRD**。
 10. **專案記憶(gbrain)**:每個專案 = 你個人 brain 裡的一個 source。**開工先召回、里程碑後沉澱**,見下節。
+11. **長指令走背景 + 顯示輸出**:會跑久或阻塞的指令(`install` / `build` / `tsc` / 測試 / `dev server` / 長 migration 等,預期 >10–20 秒)一律用 Bash **`run_in_background: true`** 啟動,再用 **`BashOutput`** 每隔幾秒輪詢,讓輸出即時顯示在對話、也能及早發現卡住。
+    - **完成判定看 exit code**,不可只看「有輸出」或「沒報錯」就當成功;輪詢到結束(有 exit code)再下一步。
+    - 快指令(git / ls / cat / 短 grep / 檔案操作 / 單次查狀態)維持**前景**,別過度包裝。
+    - **dev server / 長駐服務一定背景**(前景會永遠阻塞整個回合)。
 
 ---
 
