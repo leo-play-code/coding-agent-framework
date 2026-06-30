@@ -26,7 +26,7 @@ triggers:
 - `srs.md`(逆向工程版,§0–§9)
 - `togaf/` 全套(`0-preliminary`、`A`、`B`、`C1`、`C2`、`D`–`H`)
 
-模板來源:`templates/srs.md`、`templates/togaf/`。產出的是**填好內容**的文件,放在目標專案。
+模板來源:`${CODING_AGENT_DIR:-.}/templates/srs.md`、`${CODING_AGENT_DIR:-.}/templates/togaf/`(容器內 `CODING_AGENT_DIR=/workspace`;本機 coding-agent 根目錄則為 `./templates`)。產出的是**填好內容**的文件,放在目標專案。
 
 ## 流程
 
@@ -35,7 +35,7 @@ triggers:
 對每一類判斷狀態:**缺少** / **存在且符合本模板** / **存在但格式不同**。
 
 ### 2. 依狀況處理
-- **缺少** → 逆向工程補齊:讀既有程式碼,用 `templates/srs.md` 產出 `srs.md`(現況 Baseline),再用 `templates/togaf/` 產出 TOGAF(以 srs 為各階段 Baseline)。**產出完整結構,但內容份量隨專案規模**(見下「份量原則」)。
+- **缺少** → 逆向工程補齊:讀既有程式碼,用 `${CODING_AGENT_DIR:-.}/templates/srs.md` 產出 `srs.md`(現況 Baseline),再用 `${CODING_AGENT_DIR:-.}/templates/togaf/` 產出 TOGAF(以 srs 為各階段 Baseline)。**產出完整結構,但內容份量隨專案規模**(見下「份量原則」)。
 - **格式不同(非本模板)** → 讀舊文件**萃取內容** → 用本模板**重產取代**。
   ⚠️ **取代前先用 AskUserQuestion 跟使用者確認**,並把舊檔備份成 `*.bak`(不直接丟棄)。
 - **已符合本模板** → 只檢查是否過時,需要才更新,不重做。

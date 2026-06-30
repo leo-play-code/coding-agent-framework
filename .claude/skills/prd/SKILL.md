@@ -22,10 +22,10 @@ triggers:
 
 # prd — 產出 / 更新分層 PRD(目標 Target)
 
-目的:把 `/spec` 收斂的需求,依 `templates/prd/` 結構化成專案的**目標 (Target)** 文件,放在 `docs/prd/`。
+目的:把 `/spec` 收斂的需求,依 `${CODING_AGENT_DIR:-.}/templates/prd/` 結構化成專案的**目標 (Target)** 文件,放在 `docs/prd/`。
 **PRD 是 TOGAF 各階段的 Target 來源**(srs=現況、PRD=目標)。本 skill 只寫目標,不重抄現況、不寫架構 gap(那是 TOGAF 的事)。
 
-模板來源:`templates/prd/`(`README`、`PRD_Business`、`PRD_Data`、`PRD_Application`、`PRD_API`、`PRD_Frontend`、`PRD_Technology`)。產出的是**填好內容**的文件,放目標專案 `docs/prd/`。
+模板來源:`${CODING_AGENT_DIR:-.}/templates/prd/`(`README`、`PRD_Business`、`PRD_Data`、`PRD_Application`、`PRD_API`、`PRD_Frontend`、`PRD_Technology`;容器內 `CODING_AGENT_DIR=/workspace`)。產出的是**填好內容**的文件,放目標專案 `docs/prd/`。
 
 ## 前置
 - 必須先有 `/spec` 的需求與框架選型結論。沒有 → 提醒先跑 `/spec`,不要自行假設需求。
@@ -43,7 +43,7 @@ triggers:
 - 既有 `DESIGN.md`(若有)→ `PRD_Frontend` 不重複視覺 token,只引用。
 
 ### 3. 依模板填寫到 docs/prd/
-逐層用 `templates/prd/<檔>` 產出對應內容:
+逐層用 `${CODING_AGENT_DIR:-.}/templates/prd/<檔>` 產出對應內容:
 - **PRD_Business**:願景、目標使用者、商業目標 + 可量測 KPI、範圍與非目標、user stories(標優先級)。
 - **PRD_Data**:資料實體、核心表欄位,**+ 資料庫格式 & SQL 語法慣例(命名/型別/migration 規範)+ 範例 DDL**、約束、索引策略。
 - **PRD_Application**:模組/元件職責、互動、狀態機與不變式。
