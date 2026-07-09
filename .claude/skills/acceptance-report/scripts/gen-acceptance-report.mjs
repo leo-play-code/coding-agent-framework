@@ -7,9 +7,21 @@
 // 用法:  node scripts/gen-acceptance-report.mjs docs/acceptance/manifest.json
 //   (需 exceljs:`npm i exceljs`。路徑一律相對 manifest.meta.outDir,無硬編。)
 
-import ExcelJS from 'exceljs';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
+import { createRequire } from 'node:module';
+
+// exceljs 從「執行時的專案 cwd/node_modules」載入,而非 skill 檔所在位置 —— 因為 skill 是唯讀
+// 掛載在專案 node_modules 之外,ESM 的 bare import 不吃 NODE_PATH 也走不到專案樹。exceljs 是 CJS,
+// 用 createRequire 錨定 cwd 即可解析(專案需先 `npm i exceljs`)。
+const require = createRequire(join(process.cwd(), 'noop.js'));
+let ExcelJS;
+try {
+  ExcelJS = require('exceljs');
+} catch {
+  console.error('✘ 找不到 exceljs。請在專案根先安裝:npm i exceljs(再從專案根跑本腳本)。');
+  process.exit(2);
+}
 
 const manifestPath = process.argv[2] || 'docs/acceptance/manifest.json';
 const mf = JSON.parse(readFileSync(manifestPath, 'utf8'));
