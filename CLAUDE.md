@@ -98,6 +98,7 @@
 | 資料庫設計 / migration | `db-design` |
 | 測試(含 **unit test**) | `/ship` Test Bootstrap(產 unit test + 覆蓋率)、`/qa`、`/verify`、`playwright`(E2E) |
 | UIUX / RWD 測試 | `/design-review`(有前端時;RWD、視覺層級、色彩對比、spacing、WCAG) |
+| **驗收 / 驗證報告(給 PM/RD/User)** | **`acceptance-report`**(四 profile;**專案自帶報告 skill 優先**,如 erp-gashank 的 `test-parity`) |
 | code review | `/code-review`、**plugin `pr-review-toolkit`**(`/review-pr`,或 `Agent` 帶 `pr-review-toolkit:code-reviewer / silent-failure-hunter / type-design-analyzer …`)、`/review`、`/cso`(安全) |
 | 出貨 / push | `/ship`、`git` + `gh`(GitHub)/ `tea`(Gitea,見 `gitea-ops`) |
 | CI 建置(從零) | `ci-setup`(GitHub Actions)/ `gitea-ops` §4(Gitea Actions) |
@@ -133,8 +134,9 @@
 8. 呼叫 **`/ship`** Test Bootstrap 產生並跑 unit test;呼叫 **`/qa`**;呼叫 **`/verify`**;**有前端 → 呼叫 `/design-review`(UIUX + RWD 審查,確保設計符合 DESIGN.md)**。
 9. 呼叫 **`/code-review`** + **`pr-review-toolkit`**(+ **`/cso`** 安全審查)。
 10. push → GitHub Actions;呼叫 **`gh-actions-fix`** 修到全綠。
-11. 呼叫 **`/land-and-deploy`**(首次先 **`/setup-deploy`**)→ **`/canary`** 監控。
-12. ✅ 呼叫 **`PushNotification`** 通知使用者。
+11. 開發完成關卡 → 呼叫 **`acceptance-report`** 產三方驗收/驗證報告(見「開發完成後」節);**專案自帶報告 skill 優先**。
+12. 呼叫 **`/land-and-deploy`**(首次先 **`/setup-deploy`**)→ **`/canary`** 監控。
+13. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 ## 情境 2:重構專案
 
@@ -148,8 +150,9 @@
 5. ⏸ **停下,等使用者明確說「確認」或「繼續」**。
 6. 呼叫 **`TaskCreate`** 拆 task → 每個 task:(可選)`feature-dev:code-architect` 出藍圖當 brief → **`Agent`**(`subagent_type:"general-purpose"`,`isolation: worktree` + 自包含 brief)**落地實作** → `feature-dev:code-reviewer` 審查 → 整合;資料層變更呼叫 **`db-design`**(以 PRD_Data 為目標、srs §5 為現況;**破壞性 migration 先確認**)。**(實作者必為 general-purpose;feature-dev 子代理唯讀不能寫 code)**
 7. 呼叫 **`/ship`** Test Bootstrap;呼叫 **`/qa`**;呼叫 **`/verify`**;**有前端改動 → 呼叫 `/design-review`**;呼叫 **`/code-review`** + **`pr-review-toolkit`**;push;呼叫 **`gh-actions-fix`** 到綠燈。
-8. 呼叫 **`/land-and-deploy`** → **`/canary`**。
-9. ✅ 呼叫 **`PushNotification`** 通知使用者。
+8. 開發完成關卡 → 呼叫 **`acceptance-report`** 產三方驗收/驗證報告(見「開發完成後」節);**專案自帶報告 skill 優先**。
+9. 呼叫 **`/land-and-deploy`** → **`/canary`**。
+10. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 ## 情境 3:加 feature(延續既有專案)
 
@@ -165,8 +168,9 @@
 4. 呼叫 **`TaskCreate`** 拆 task → 每個 task:(可選)`feature-dev:code-architect` 出藍圖當 brief → 可平行就用 **`Agent`**(`subagent_type:"general-purpose"`,`isolation: worktree` + 自包含 brief)**落地實作**,遵循步驟 0 的慣例 → `feature-dev:code-reviewer` 審查。**(實作者必為 general-purpose;feature-dev 子代理唯讀不能寫 code)**
 5. 呼叫 **`/ship`** Test Bootstrap;先跑既有測試確保無回歸;呼叫 **`/qa`**;呼叫 **`/verify`**;**動到前端 → 呼叫 `/design-review`**。
 6. 呼叫 **`/code-review`** + **`pr-review-toolkit`**;push;呼叫 **`gh-actions-fix`** 到綠燈。
-7. 呼叫 **`/land-and-deploy`** → **`/canary`**(feature 要上線時)。
-8. ✅ 呼叫 **`PushNotification`** 通知使用者。
+7. 開發完成關卡 → 呼叫 **`acceptance-report`** 產三方驗收/驗證報告(見「開發完成後」節);**專案自帶報告 skill 優先**。
+8. 呼叫 **`/land-and-deploy`** → **`/canary`**(feature 要上線時)。
+9. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 ## 情境 4:debug
 
@@ -182,6 +186,22 @@
 7. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 > 不產**全套** srs/TOGAF、不跑 doc-baseline(對修一個 bug 過度)。若根因是**架構缺陷** → 升級「重構」情境,屆時才補文件。
+
+---
+
+## 開發完成後:三方驗收/驗證報告(acceptance-report)
+
+情境 1/2/3 的實作 + 驗證(`/ship` 測試、`/qa`、`/verify`、`/code-review`)通過後、`/land-and-deploy` 前,**必須產出讓 PM/RD/User 溝通協作的驗收/驗證報告**。這是開發完成的收尾交付,不是可選。
+
+1. **專案自帶報告優先** —— 若專案有自己的報告機制/skill(如 erp-gashank 的 `test-parity` 逐格對等,或專案 `docs/` 內既有的報告產生器),**用專案自己的**,產到專案既有位置;不硬套通用格式。
+2. 否則呼叫 **`acceptance-report`** skill:對本次做的每個功能判 profile(`migration` 汰換 / `greenfield` 全新 / `api` 後端 / `webapp` 一般 web),抽 manifest → 跑 `gen-acceptance-report.mjs` → 產三份到 `docs/acceptance/`:
+   - **使用者驗收報告**(User/PM 勾填 PASS/FAIL)
+   - **開發者驗證報告**(RD;證據力 A/B/C **誠實標**,別把測試綠講成已對基準)
+   - **三方狀態表**(PM;需求→實作→驗證→驗收)
+3. 依 profile 用 `/verify`、`/qa`、契約測試把證據力提升到 A;要給 User 的正式版可 `make-pdf`。
+4. PR 描述引用三方狀態表;每次新功能/改動回來 append/更新該筆功能,報告永遠對齊現況。
+
+> debug 情境輕量:修完在 PR 附「修復前後 / 重現」驗證即可,不強制全套 acceptance-report。
 
 ---
 
@@ -210,6 +230,7 @@
 | 用 `subagent_type:"feature-dev"` 啟動實作 | 沒有這個 type;實作用 `general-purpose`,探索/設計/審查才用 `feature-dev:code-explorer/code-architect/code-reviewer` |
 | 自行判斷前端風格後直接套用 | 呼叫 `/design-md` |
 | push 後沒跑 `/code-review` | 任何程式碼進 repo 前必須過 `/code-review` |
+| 驗證/實作完成就直接部署,沒產驗收報告 | 情境 1/2/3 完成後呼叫 `acceptance-report`(專案自帶報告 skill 優先);給 PM/RD/User 的收尾交付 |
 | 說「交給背景 agent 處理 / 等它完成通知你」後結束回合 | 回合結束=沒東西在跑;長工作在當前回合內做完,或明確把控制權交回使用者等「繼續」 |
 
 ---

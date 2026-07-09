@@ -1,0 +1,96 @@
+{
+  "_comment": "acceptance-report manifest — 描述每個功能要給 PM/RD/User 溝通協作的三件事:①User 驗收準則 ②開發者驗證基準與證據力 ③三方狀態。每個 feature 的 profile 決定『驗證基準從哪來』。所有欄位須忠實抽自程式碼/需求,勿憑印象。gen-acceptance-report.mjs 吃這個檔產三份報告。",
+  "meta": {
+    "project": "範例專案",
+    "profile": "greenfield",
+    "baselineName": "需求規格 / 舊系統 / API 合約 / 驗收清單(依 profile)",
+    "outDir": "docs/acceptance"
+  },
+  "features": [
+    {
+      "id": "aapr190a",
+      "name": "廠商應付帳齡分析",
+      "profile": "migration",
+      "surface": "/ap/aapr190a",
+      "owner": { "pm": "", "rd": "" },
+      "status": { "spec": "done", "impl": "done", "verify": "pending", "accept": "pending" },
+      "acceptance": [
+        "彙總查詢:筆數/合計合理、無錯誤",
+        "匯出 Excel:與畫面/舊系統一致、欄位齊全、不亂碼",
+        "列印:版面/抬頭/合計/簽章正確"
+      ],
+      "fields": ["廠商編號", "廠商名稱", "付款方式", "會計科目", "各帳齡桶", "合計", "總計列"],
+      "writes": null,
+      "verification": {
+        "baseline": "舊系統 TIPTOP 逐格對等(legacy 匯出檔 legacy/aapr190a__*.xlsx 或先前人工驗值)",
+        "strategy": "harness 對真 DB 跑 app 資料層 → 逐格 diff + 恆等式(彙總總計==逐筆加總==桶合計)",
+        "evidenceLevel": "B",
+        "harness": "scripts/harness/aapr190a.mjs",
+        "note": "即時計算、legacy 未存回結果;有 legacy 匯出檔才能升到 A(全新獨立逐格對)"
+      }
+    },
+    {
+      "id": "user-invite",
+      "name": "邀請成員加入專案",
+      "profile": "greenfield",
+      "surface": "/settings/members",
+      "owner": { "pm": "", "rd": "" },
+      "status": { "spec": "done", "impl": "done", "verify": "done", "accept": "pending" },
+      "acceptance": [
+        "輸入 email 送出邀請 → 對方收到邀請信",
+        "已是成員的 email 不可重複邀請 → 顯示錯誤",
+        "取消邀請後,原邀請連結失效"
+      ],
+      "fields": [],
+      "writes": "送出邀請寫入 invitations 表並寄信;取消為軟刪",
+      "verification": {
+        "baseline": "SPEC.md#邀請流程 的驗收準則",
+        "strategy": "verify 端到端跑一遍(邀請→收信→接受/取消)+ 單元測試涵蓋三條準則",
+        "evidenceLevel": "A",
+        "criteriaSource": "SPEC.md#邀請流程"
+      }
+    },
+    {
+      "id": "POST /orders",
+      "name": "建立訂單 API",
+      "profile": "api",
+      "surface": "POST /api/orders",
+      "owner": { "pm": "", "rd": "" },
+      "status": { "spec": "done", "impl": "done", "verify": "done", "accept": "done" },
+      "acceptance": [
+        "合法 payload → 201,回傳訂單物件符合 schema",
+        "缺必填欄位 → 400,錯誤碼 ORDER_INVALID",
+        "庫存不足 → 409,錯誤碼 STOCK_INSUFFICIENT"
+      ],
+      "fields": [],
+      "writes": "建立訂單、扣庫存(交易)",
+      "verification": {
+        "baseline": "openapi.yaml #/paths/~1orders/post 的 request/response schema",
+        "strategy": "契約測試(回應對 schema 驗證)+ 三個案例的範例 req/resp 比對",
+        "evidenceLevel": "A",
+        "contract": "openapi.yaml"
+      }
+    },
+    {
+      "id": "checkout",
+      "name": "結帳流程",
+      "profile": "webapp",
+      "surface": "/checkout",
+      "owner": { "pm": "", "rd": "" },
+      "status": { "spec": "done", "impl": "done", "verify": "pending", "accept": "pending" },
+      "acceptance": [
+        "加入購物車 → 結帳 → 付款成功頁",
+        "購物車為空時不可進入結帳",
+        "套用折扣碼後金額正確"
+      ],
+      "fields": [],
+      "writes": "建立訂單、呼叫金流",
+      "verification": {
+        "baseline": "PM 提供的驗收清單(3 條主要流程)",
+        "strategy": "qa 逐步驟實際操作 + 每步截圖存證",
+        "evidenceLevel": "C",
+        "screenshots": "docs/acceptance/shots/checkout/"
+      }
+    }
+  ]
+}
