@@ -13,7 +13,7 @@
 # name=="Skill" 的 input.skill;寫程式碼 = Write/Edit/MultiEdit 的 file_path 副檔名。
 # 任何解析失敗一律放行(fail-open):hook 不該把 agent 卡死。
 
-import sys, json, os, glob
+import sys, json, os, glob, re
 
 # ── 關卡設定:條件成立卻沒跑對應 skill → 擋 push ───────────────────────────
 #   key  = 必跑的 skill 名(Skill tool 的 input.skill)
@@ -36,6 +36,19 @@ CODE_EXT = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".rb",
 FRONTEND_EXT = {".tsx", ".jsx", ".vue", ".svelte", ".css", ".scss", ".sass",
                 ".less", ".html", ".htm"}
 
+# ── 佔位 sleep 關卡 ───────────────────────────────────────────────────────
+# 「CI 綠前不可結束回合」的舊習慣讓 agent 疊幾十個背景 `sleep N; echo tick` 佔位守回合,
+# 到期通知回灌對話刷出一排「回聲。無待辦。」。後端已有 CI watcher(回合結束時分支 CI 若
+# pending 會輪詢,出結果注入【CI 結果】),所以以長 sleep 開頭的指令一律擋下、教它收手。
+# resume 回來的舊對話光靠系統提示壓不住(歷史裡滿是舊行為前例),要硬擋。
+# 只擋「開頭就是 sleep ≥30 秒」的純計時器;指令中段的短 sleep(服務暖機等)不受影響。
+_LEADING_SLEEP = re.compile(r"^\s*sleep\s+(\d+)")
+
+def placeholder_sleep_secs(cmd: str):
+    m = _LEADING_SLEEP.match(cmd or "")
+    return int(m.group(1)) if m else None
+
+
 # push / 開 PR 類指令才檢查;其餘 Bash 一律放行
 def is_ship_command(cmd: str) -> bool:
     c = cmd.lower()
@@ -52,6 +65,16 @@ def main():
         sys.exit(0)
 
     cmd = (payload.get("tool_input") or {}).get("command", "") or ""
+
+    secs = placeholder_sleep_secs(cmd)
+    if secs is not None and secs >= 30:
+        sys.stderr.write(
+            "⛔ 佔位 sleep 被擋下:不要用 sleep(前景或背景)守回合等 CI / 等部署。\n"
+            "push 之後直接回報「已 push,等 CI 結果」並結束回合——後端 CI watcher 會在\n"
+            "CI 有結果(綠/紅)時自動送一則【CI 結果】訊息進對話,屆時再收尾或修復。\n"
+            "若是等自己啟動的服務就緒,改用帶檢查的短輪詢(如 curl 重試迴圈),不要純 sleep。\n")
+        sys.exit(2)
+
     if not is_ship_command(cmd):
         sys.exit(0)
 
