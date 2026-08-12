@@ -1,0 +1,136 @@
+{
+  "_comment": "refactor-intake 工單 manifest。格式刻意與 acceptance-report 的 manifest 相同(meta + features[]),收料狀態掛在各 feature 的額外 intake 欄位下。gen-acceptance-report.mjs 只讀已知欄位、忽略 intake,所以同一份檔從開案用到驗收不需轉換。materials 各項只能是 有/缺/不適用,且必須實際讀檔判定,不可憑使用者口頭說有。intake.dir 與 legacyFiles[].file 記錄使用者材料的『實際所在路徑』——不要搬動或改名他的檔案。legacyFiles[].params 是在對話裡跟使用者問到的查詢參數,直接寫在這裡,不要求他去編輯 params.md。",
+  "meta": {
+    "project": "erp-gashank",
+    "profile": "migration",
+    "repo": "erp-gashank",
+    "baseBranch": "dev",
+    "baselineName": "舊系統 TIPTOP 實際匯出檔逐格對等",
+    "outDir": "docs/acceptance",
+    "intakeDir": "docs/intake"
+  },
+  "features": [
+    {
+      "_case": "① 材料齊全 → 可開跑,目標證據力 A",
+      "id": "aapr190a",
+      "name": "廠商應付帳齡分析",
+      "profile": "migration",
+      "surface": "/ap/aapr190a",
+      "legacyProgram": "aapr190a",
+      "owner": { "pm": "", "rd": "" },
+      "status": { "spec": "done", "impl": "pending", "verify": "pending", "accept": "pending" },
+      "acceptance": [
+        "以相同基準日/廠商/科目查詢,筆數與合計與舊系統相符",
+        "匯出 Excel:欄位齊全、順序與舊系統一致、不亂碼",
+        "列印:抬頭/合計/簽章位置正確",
+        "各帳齡桶金額與舊系統逐格相符(到元)"
+      ],
+      "fields": ["廠商編號", "廠商名稱", "付款方式", "會計科目", "30日內", "31-60日", "61-90日", "91-120日", "120日以上", "合計", "總計列"],
+      "writes": null,
+      "verification": {
+        "baseline": "使用者提供的舊系統匯出檔 重構材料/應付帳齡/應付帳齡_0630.xlsx(基準日 2026-06-30、廠商 Q363、科目 2201,參數為對話中問到)",
+        "strategy": "harness 對真 DB 跑新系統資料層 → 逐列逐欄 diff + 恆等式(桶合計==合計欄==總計列)",
+        "evidenceLevel": "C",
+        "harness": null,
+        "note": "尚未開發。材料齊備,開發完應可直接做逐格 diff 升到 A。"
+      },
+      "intake": {
+        "dir": "重構材料/應付帳齡",
+        "materials": {
+          "source": "有",
+          "conditions": "有",
+          "fields": "有",
+          "outputSample": "有",
+          "legacyFile": "有"
+        },
+        "legacyFiles": [
+          { "file": "重構材料/應付帳齡/應付帳齡_0630.xlsx", "params": { "基準日": "2026-06-30", "查詢方式": "明細", "廠商": "Q363", "科目": "2201", "帳齡分段": "30/60/90/120" } }
+        ],
+        "evidenceTarget": "A",
+        "blocked": false,
+        "blockedReason": null,
+        "waived": []
+      }
+    },
+    {
+      "_case": "② legacy 檔有但參數沒填 → blocked,要回頭跟使用者要",
+      "id": "axcr435",
+      "name": "庫存成本進出期",
+      "profile": "migration",
+      "surface": "/cost/axcr435",
+      "legacyProgram": "axcr435",
+      "owner": { "pm": "", "rd": "" },
+      "status": { "spec": "pending", "impl": "pending", "verify": "pending", "accept": "pending" },
+      "acceptance": [
+        "以相同年度/期別/成本分群碼查詢,結果與舊系統相符",
+        "匯出 Excel 欄位與舊系統一致"
+      ],
+      "fields": ["料號", "品名", "期初數量", "入庫數量", "出庫數量", "期末數量", "期末金額"],
+      "writes": null,
+      "verification": {
+        "baseline": "(待收料)重構材料/庫存成本/庫存進出_P05.csv 已提供,但使用者尚未說明它是用什麼條件跑出來的",
+        "strategy": "harness 逐格 diff + 恆等式(期初+入-出==期末)",
+        "evidenceLevel": "C",
+        "harness": null,
+        "note": "缺參數則無法用相同條件重跑,逐格對做不了。"
+      },
+      "intake": {
+        "dir": "重構材料/庫存成本",
+        "materials": {
+          "source": "有",
+          "conditions": "有",
+          "fields": "缺",
+          "outputSample": "缺",
+          "legacyFile": "缺"
+        },
+        "legacyFiles": [
+          { "file": "重構材料/庫存成本/庫存進出_P05.csv", "params": null }
+        ],
+        "evidenceTarget": "A",
+        "blocked": true,
+        "blockedReason": "① 庫存進出_P05.csv 的查詢參數未知(年度/期別/成本分群碼/是否只有成本),無法用相同條件重跑新系統做逐格對;② 欄位清單缺小計與分組規則,逐格比對會在總計列失敗。",
+        "waived": []
+      }
+    },
+    {
+      "_case": "③ 使用者明示舊系統無資料可對 → 顯式降級到 B,不 blocked",
+      "id": "aglr9008",
+      "name": "製銷管研費用表",
+      "profile": "migration",
+      "surface": "/gl/aglr9008",
+      "legacyProgram": "aglr9008",
+      "owner": { "pm": "", "rd": "" },
+      "status": { "spec": "done", "impl": "pending", "verify": "pending", "accept": "pending" },
+      "acceptance": [
+        "以相同公司別/年度/期別查詢,各費用類別小計正確",
+        "匯出 Excel 欄位齊全"
+      ],
+      "fields": ["費用類別", "科目", "本期金額", "累計金額", "小計", "總計列"],
+      "writes": null,
+      "verification": {
+        "baseline": "無 legacy 匯出檔(使用者確認舊系統該報表已無法產出);改以恆等式驗內部一致",
+        "strategy": "harness 恆等式(各類別小計加總==總計列)",
+        "evidenceLevel": "C",
+        "harness": null,
+        "note": "使用者已知情:本功能無法對本尊,最高只能到 B。驗收報告需誠實標明。"
+      },
+      "intake": {
+        "dir": "重構材料/製銷管研",
+        "materials": {
+          "source": "有",
+          "conditions": "有",
+          "fields": "有",
+          "outputSample": "有",
+          "legacyFile": "不適用"
+        },
+        "legacyFiles": [],
+        "evidenceTarget": "B",
+        "blocked": false,
+        "blockedReason": null,
+        "waived": [
+          { "material": "legacyFile", "reason": "使用者 2026-07-20 確認舊系統該報表已停用、無法再匯出", "consequence": "證據力上限降為 B(僅內部一致,未對本尊)" }
+        ]
+      }
+    }
+  ]
+}
