@@ -36,6 +36,14 @@
    - 長工作就在**這個回合內**做完——子代理會把回合撐住直到完成(回合可以跑很久,沒關係)。
    - 真的要分批,就**明確把控制權交回**使用者(「我做到這裡,你說『繼續』我接著做」),由使用者的下一句觸發下一回合;**不要**假裝有背景進度在累積。
 
+8. **要部署到公司目標主機的專案:push 前必須呼叫 `containerize`,而且 `verify-up.mjs` 要真的跑到 exit 0**。
+   - 適用判斷:repo 在 team org、或已有 `compose.<env>.yml` / 後台建了部署規則 → 就是這類專案。
+   - 「檔案產齊了」不算、「我看過 Dockerfile 應該沒問題」不算、「build 過了」也不算 ——
+     **要真的 up 起來、curl 得到**(`node ~/.claude/skills/containerize/verify-up.mjs <env>`)。
+   - 你的容器掛了宿主的 docker socket,**跑得起來 docker**;沒跑就 push,push 會被 skill-gate 擋下。
+   - 為什麼硬性:對話預覽走 **mise**、目標機走 **docker**,是兩套環境。只驗過 mise 那邊
+     等於沒驗過要上線的那一套 —— 「我這邊好好的」正是最常見的部署失敗原因。
+
 ---
 
 ## 核心原則
@@ -98,12 +106,15 @@
 | 資料庫設計 / migration | `db-design` |
 | 測試(含 **unit test**) | `/ship` Test Bootstrap(產 unit test + 覆蓋率)、`/qa`、`/verify`、`playwright`(E2E) |
 | UIUX / RWD 測試 | `/design-review`(有前端時;RWD、視覺層級、色彩對比、spacing、WCAG) |
+| **汰換重構的開案收料** | **`refactor-intake`**(逐支清點五類材料、缺料主動索取、產工單 manifest;manifest 與 `acceptance-report` 同格式,可一路用到驗收) |
 | **驗收 / 驗證報告(給 PM/RD/User)** | **`acceptance-report`**(四 profile;**專案自帶報告 skill 優先**,如 erp-gashank 的 `test-parity`) |
+| **開 PR 前的風險交代** | **`edge-cases`**(邊界值 / 條件組合判定表 / 異常路徑;未處理一律誠實標 ⚠️,產出貼進 PR 描述的區塊) |
 | code review | `/code-review`、**plugin `pr-review-toolkit`**(`/review-pr`,或 `Agent` 帶 `pr-review-toolkit:code-reviewer / silent-failure-hunter / type-design-analyzer …`)、`/review`、`/cso`(安全) |
 | 出貨 / push | `/ship`、`git` + `gh`(GitHub)/ `tea`(Gitea,見 `gitea-ops`) |
 | CI 建置(從零) | `ci-setup`(GitHub Actions)/ `gitea-ops` §4(Gitea Actions) |
 | CI 修到綠燈 | `gh-actions-fix`(GitHub)/ `gitea-ops` §5(Gitea) |
 | **Gitea 全套(repo/push/PR/CI)** | **`gitea-ops`** —— GitHub 做的事用 Gitea 再做一遍 |
+| **容器化 / 部署契約 / 實跑驗證** | **`containerize`** —— 產 `compose.<env>.yml` + `Dockerfile` + `.cf/environment.json` + `.env.local`,**並用 `verify-up.mjs` 真的 build + up + curl 驗過**;主機部署(部署終端控制)的前置條件,缺了或沒驗過,部署會被六道守衛擋下 |
 | 部署 / 上線後 | `/land-and-deploy`(首次先 `/setup-deploy`)、`/canary` |
 
 ---
@@ -128,19 +139,24 @@
 2. 呼叫 **`prd`** skill 產出**分層 PRD(全套)**到 `docs/prd/` —— 作為整個系統的**目標 (Target)**(含資料格式/SQL 慣例、API、前端畫面、技術選型);無前端可略 PRD_Frontend。
 3. 呼叫 **`/autoplan`** 或進入計畫模式規劃 + 審查。
 4. 依模板填寫 **TOGAF**(A–H)(`templates/togaf/`;greenfield 各階段 Baseline 留空,**Target 引用 `docs/prd/`**)。
-5. 初始化 repo、呼叫 **`ci-setup`** 建立 GitHub Actions CI、commit、push。
+5. 初始化 repo、呼叫 **`ci-setup`** 建立 GitHub Actions CI、commit、push。**若這個專案要部署到主機(部署終端控制),同時呼叫 `containerize` 產出部署契約檔**(`compose.<env>.yml` / `Dockerfile` / `.cf/environment.json` / `.env.local`)—— 缺這些部署會被守衛擋下。
 6. ⏸ **停下,等使用者明確說「確認」或「繼續」**。
 7. 呼叫 **`TaskCreate`** 拆 task → 每個 task:(可選)先用 **`Agent`** 帶 `feature-dev:code-architect` 出實作藍圖當 brief → 用 **`Agent`**(`subagent_type:"general-purpose"`,`isolation: worktree` + 自包含 brief)**落地實作** → 用 `feature-dev:code-reviewer` 審查。可平行的平行、相依的循序;完成後整合(merge + 解衝突 + 測試)。**(實作者必為 general-purpose;feature-dev 子代理唯讀不能寫 code)**
 8. 呼叫 **`/ship`** Test Bootstrap 產生並跑 unit test;呼叫 **`/qa`**;呼叫 **`/verify`**;**有前端 → 呼叫 `/design-review`(UIUX + RWD 審查,確保設計符合 DESIGN.md)**。
 9. 呼叫 **`/code-review`** + **`pr-review-toolkit`**(+ **`/cso`** 安全審查)。
 10. push → GitHub Actions;呼叫 **`gh-actions-fix`** 修到全綠。
 11. 開發完成關卡 → 呼叫 **`acceptance-report`** 產三方驗收/驗證報告(見「開發完成後」節);**專案自帶報告 skill 優先**。
-12. 呼叫 **`/land-and-deploy`**(首次先 **`/setup-deploy`**)→ **`/canary`** 監控。
+12. **要上公司目標主機 → 呼叫 `containerize`**(產/校部署契約 + `verify-up.mjs` 實跑到 exit 0),然後走部署管線:push → PR → CI 綠 → 合 `dev` → repo 的 `deploy.yml` 向後台請求 → 後台裁決 → 中央部署器部署到目標機。**部署不是你自己跑的**,別在目標機上手動 ssh/docker。
+    其他情況(自架、GitHub 專案)才用 **`/land-and-deploy`**(首次先 **`/setup-deploy`**)→ **`/canary`** 監控。
 13. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 ## 情境 2:重構專案
 
 > 每步執行前說明:「步驟 N:呼叫 [skill]，因為…」
+
+> **前置關卡(僅限汰換/重寫舊系統:有舊程式要逐支重現行為)**:先呼叫 **`refactor-intake`** —— 逐支清點五類材料(原始碼 / 查詢條件 / 顯示欄位 / 輸出樣本 / 對照結果檔+參數),**缺的當面跟使用者要**,產出工單 manifest 到 `docs/intake/`。
+> **`intake.blocked = true` 的工單不得進入下面的流程。** 一般重構(無舊系統可對照)略過此關卡。
+> **收完料先停**:`refactor-intake` 產出 manifest + 就緒摘要後,把「接下來做哪幾支、怎麼做」交給使用者決定,不要自己接著把整包工單做完。(舊的「批量重構佇列」已於 2026-08-05 移除,別再提它或 `CF_BATCH_REFACTOR`。)
 
 0. 呼叫 **`doc-baseline`** — 讀既有程式碼 → 產出/正規化 `srs.md` + TOGAF A–H。**已有文件不代表可以跳過**;`doc-baseline` 負責驗證格式是否符合本模板。
 1. 呼叫 **`/spec`** — 談重構目標 + 框架。**有前端改動 → 呼叫 `/design-md`**:預設萃取沿用既有風格;若要重新設計則問清楚來源。
@@ -151,7 +167,7 @@
 6. 呼叫 **`TaskCreate`** 拆 task → 每個 task:(可選)`feature-dev:code-architect` 出藍圖當 brief → **`Agent`**(`subagent_type:"general-purpose"`,`isolation: worktree` + 自包含 brief)**落地實作** → `feature-dev:code-reviewer` 審查 → 整合;資料層變更呼叫 **`db-design`**(以 PRD_Data 為目標、srs §5 為現況;**破壞性 migration 先確認**)。**(實作者必為 general-purpose;feature-dev 子代理唯讀不能寫 code)**
 7. 呼叫 **`/ship`** Test Bootstrap;呼叫 **`/qa`**;呼叫 **`/verify`**;**有前端改動 → 呼叫 `/design-review`**;呼叫 **`/code-review`** + **`pr-review-toolkit`**;push;呼叫 **`gh-actions-fix`** 到綠燈。
 8. 開發完成關卡 → 呼叫 **`acceptance-report`** 產三方驗收/驗證報告(見「開發完成後」節);**專案自帶報告 skill 優先**。
-9. 呼叫 **`/land-and-deploy`** → **`/canary`**。
+9. **要上公司目標主機 → 先呼叫 `containerize`**(契約 + `verify-up.mjs` 實跑到 exit 0),再走「push → PR → CI 綠 → 合 `dev` → 後台裁決 → 中央部署器」;其他情況用 **`/land-and-deploy`** → **`/canary`**。
 10. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 ## 情境 3:加 feature(延續既有專案)
@@ -169,7 +185,7 @@
 5. 呼叫 **`/ship`** Test Bootstrap;先跑既有測試確保無回歸;呼叫 **`/qa`**;呼叫 **`/verify`**;**動到前端 → 呼叫 `/design-review`**。
 6. 呼叫 **`/code-review`** + **`pr-review-toolkit`**;push;呼叫 **`gh-actions-fix`** 到綠燈。
 7. 開發完成關卡 → 呼叫 **`acceptance-report`** 產三方驗收/驗證報告(見「開發完成後」節);**專案自帶報告 skill 優先**。
-8. 呼叫 **`/land-and-deploy`** → **`/canary`**(feature 要上線時)。
+8. **要上公司目標主機 → 呼叫 `containerize`**:契約檔缺就補、已有也要在動過相依/建置方式後重跑 `verify-up.mjs` 到 exit 0(改了套件卻沒重驗,正是「dev 好好的、目標機起不來」的來源),再走「push → PR → CI 綠 → 合 `dev` → 後台裁決 → 中央部署器」;其他情況用 **`/land-and-deploy`** → **`/canary`**(feature 要上線時)。
 9. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 ## 情境 4:debug
@@ -186,6 +202,34 @@
 7. ✅ 呼叫 **`PushNotification`** 通知使用者。
 
 > 不產**全套** srs/TOGAF、不跑 doc-baseline(對修一個 bug 過度)。若根因是**架構缺陷** → 升級「重構」情境,屆時才補文件。
+
+---
+
+## 開 PR 之前:風險交代(edge-cases)
+
+**任何會進 repo 的程式碼改動,開 PR 前都要呼叫 `edge-cases` skill**,把產出的「風險交代」
+區塊放進 PR 描述。這不是可選。
+
+為什麼:CI 擋得住語法錯、型別錯、build 不過、import 壞掉;**擋不住輸入為空、條件組合沒
+定義、連線斷掉**。而這三類正好是 AI 寫 code 時最容易漏的 —— AI 寫的是它腦中的典型案例,
+而且對自己寫的東西有信心,不會主動去懷疑。
+
+**這件事不能留給審查的人。** 要他自己把邊界、組合、異常逐一想過,等於要他補完實作者沒做的
+功課 —— 結果就是 LGTM。實作者最清楚哪裡是猜的、哪裡沒處理,由實作者交代,審查的人只需要
+判斷「這個我能不能接受」。
+
+三項:**a. 邊界值**(空/單筆/上限/off-by-one)、**b. 判定表**(多條件組合有沒有漏格)、
+**c. 錯誤猜測**(空值/外部依賴掛掉/timeout/併發)。份量隨改動大小調整,細節見 skill。
+
+**查到的問題要分流,不是全部自己動手補掉**:
+- **能寫成測試、預期行為客觀的** → 寫測試(先確認是紅的)→ 修 → 重跑,**最多三輪**;修好才算數,
+  測試結果要貼出來。
+- **需要人決定的**(要不要分頁、逾時設幾秒、某個條件組合該回什麼)→ **不要碰**,寫進交代給審查者。
+  ⚠️ 最危險的失敗模式是「為了讓警告消失而加防禦性程式碼」(`if (!x) return []`、`catch {}`)——
+  那正好製造出這個 skill 要抓的無聲失敗。**寧可留一個誠實的 ⚠️,也不要一個讓檢查變綠的假修復。**
+
+⚠️ **誠實是這份交代的全部價值**:沒處理就寫「未處理 ⚠️」。寫「已處理」但其實沒有,比不寫
+更糟 —— 審查的人會因此跳過那一項。**一份全部都是「已處理」的交代等於沒寫。**
 
 ---
 
@@ -230,6 +274,7 @@
 | 用 `subagent_type:"feature-dev"` 啟動實作 | 沒有這個 type;實作用 `general-purpose`,探索/設計/審查才用 `feature-dev:code-explorer/code-architect/code-reviewer` |
 | 自行判斷前端風格後直接套用 | 呼叫 `/design-md` |
 | push 後沒跑 `/code-review` | 任何程式碼進 repo 前必須過 `/code-review` |
+| 汰換重構直接開寫,沒清點舊系統材料 | 先呼叫 `refactor-intake`;缺料要當面索取,不可用「(待確認)」往下走 —— 那會讓缺料在開發完才爆出來 |
 | 驗證/實作完成就直接部署,沒產驗收報告 | 情境 1/2/3 完成後呼叫 `acceptance-report`(專案自帶報告 skill 優先);給 PM/RD/User 的收尾交付 |
 | 說「交給背景 agent 處理 / 等它完成通知你」後結束回合 | 回合結束=沒東西在跑;長工作在當前回合內做完,或明確把控制權交回使用者等「繼續」 |
 

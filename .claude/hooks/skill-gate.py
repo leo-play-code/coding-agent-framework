@@ -13,7 +13,7 @@
 # name=="Skill" 的 input.skill;寫程式碼 = Write/Edit/MultiEdit 的 file_path 副檔名。
 # 任何解析失敗一律放行(fail-open):hook 不該把 agent 卡死。
 
-import sys, json, os, glob, re
+import sys, json, os, glob, re, subprocess
 
 # ── 關卡設定:條件成立卻沒跑對應 skill → 擋 push ───────────────────────────
 #   key  = 必跑的 skill 名(Skill tool 的 input.skill)
@@ -26,6 +26,10 @@ import sys, json, os, glob, re
 GATE = {
     "code-review":   "code",
     "design-review": "frontend",
+    # 邊界值 / 條件組合 / 異常路徑的風險交代。跟 code-review 一樣屬於「零誤判」——
+    # 任何程式碼改動都適用(debug 只需各一句帶過,skill 內有分份量)。CI 擋得住語法與
+    # 型別,擋不住空輸入、沒定義的條件組合、沒設 timeout,而那正是 AI 最常漏的。
+    "edge-cases":    "code",
     # "cso":         "code",   # 解除註解 = 每次有程式碼變動都強制安全審查(含 debug)
     # "spec":        "code",   # 解除註解 = 每次有程式碼變動都強制需求釐清(含 debug)
 }
@@ -47,6 +51,27 @@ _LEADING_SLEEP = re.compile(r"^\s*sleep\s+(\d+)")
 def placeholder_sleep_secs(cmd: str):
     m = _LEADING_SLEEP.match(cmd or "")
     return int(m.group(1)) if m else None
+
+
+# ── containerize 關卡(要上公司目標主機的專案)────────────────────────────
+# 「AI 一定要把 docker 起起來、確認部署得上目標主機」是流程硬性要求(CLAUDE.md 強制規則 8)。
+# 這裡把它變成擋得住的關卡:repo 根有 compose.<env>.yml(= 走部署終端控制的專案),
+# 這次又動過程式碼,卻沒呼叫過 containerize → 擋下 push。
+#
+# 為什麼用「compose.<env>.yml 存在」當條件:它就是部署契約本身,中央部署器第一道守衛查的
+# 也是它。不看 repo 名或 org(agent 未必知道自己在哪個 org),只看檔案這個客觀事實。
+# compose.example.yml 是模板留的樣板、不是實際環境,要排除。
+def deploy_contract_repo():
+    try:
+        r = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+                           capture_output=True, text=True, timeout=5)
+        root = r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else os.getcwd()
+    except Exception:
+        root = os.getcwd()
+    for f in glob.glob(os.path.join(root, "compose.*.yml")):
+        if os.path.basename(f) != "compose.example.yml":
+            return root
+    return None
 
 
 # push / 開 PR 類指令才檢查;其餘 Bash 一律放行
@@ -128,16 +153,32 @@ def main():
     cond = {"code": wrote_code, "frontend": wrote_frontend}
     missing = [sk for sk, w in GATE.items()
                if cond.get(w) and sk not in skills_called]
-    if not missing:
+    # 部署契約專案的額外關卡(條件不看寫了什麼檔,看這個 repo 是不是要上目標主機)
+    need_container = (wrote_code and "containerize" not in skills_called
+                      and deploy_contract_repo() is not None)
+    if not missing and not need_container:
         sys.exit(0)
 
-    lines = [
-        "⛔ push 被擋下:本次已修改程式碼,但尚未實際呼叫必跑的審查 skill。",
-        "依強制規則「任何程式碼進 repo 前必須過 /code-review」,請先用 Skill tool 呼叫:",
-    ]
-    for sk in missing:
-        lines.append(f"  • /{sk}")
-    lines.append("(這些 skill 都已安裝;`ls ~/.claude/skills/` 可確認。跑完並修正後再 push。)")
+    lines = []
+    if missing:
+        lines += [
+            "⛔ push 被擋下:本次已修改程式碼,但尚未實際呼叫必跑的審查 skill。",
+            "依強制規則「任何程式碼進 repo 前必須過 /code-review」,請先用 Skill tool 呼叫:",
+        ]
+        lines += [f"  • /{sk}" for sk in missing]
+        lines.append("(這些 skill 都已安裝;`ls ~/.claude/skills/` 可確認。跑完並修正後再 push。)")
+    if need_container:
+        if lines:
+            lines.append("")
+        lines += [
+            "⛔ push 被擋下:這個專案要部署到公司目標主機(repo 根有 compose.<env>.yml),",
+            "本次動過程式碼,卻還沒跑過 containerize 的實跑驗證。",
+            "請用 Skill tool 呼叫 `containerize`,並且真的把它跑起來:",
+            "  node ~/.claude/skills/containerize/verify-up.mjs staging   # exit 0 才算過",
+            "你的容器掛了宿主的 docker socket,跑得起來 docker。對話預覽走 mise、目標機走 docker",
+            "是兩套環境 —— 只驗過 mise 那邊,等於沒驗過要上線的那一套。",
+            "(真的有外部相依而起不來:把卡在哪寫進 PR 說明,別假裝驗過。)",
+        ]
     sys.stderr.write("\n".join(lines) + "\n")
     sys.exit(2)   # exit 2 = 擋下這次 Bash 呼叫,stderr 回饋給 Claude
 
