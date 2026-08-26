@@ -44,6 +44,22 @@
    - 為什麼硬性:對話預覽走 **mise**、目標機走 **docker**,是兩套環境。只驗過 mise 那邊
      等於沒驗過要上線的那一套 —— 「我這邊好好的」正是最常見的部署失敗原因。
 
+9. **連不上外部服務時,先量再說 —— 不准把推論講成事實**:
+   資料庫 / API 連不上時**必須實際量過**才能下結論,而且結論只能涵蓋**你量到的那一個位址**。
+   - 公司 Oracle 一律用 `dbq`(每個對話容器都有,不用裝任何東西、不用改任何程式):
+     ```bash
+     node /cf-shared/oracle/bin/dbq.mjs --list                    # 有哪些登記好的連線
+     node /cf-shared/oracle/bin/dbq.mjs --conn <名稱> --test
+     node /cf-shared/oracle/bin/dbq.mjs --dsn <host>:1521/<service> --user U --password P --test
+     ```
+     它會直接指出是**哪一層**壞了:thin 模式 / Instant Client / service-vs-SID / 帳密 / 網路。
+   - 其他位址用 `timeout 5 bash -c "</dev/tcp/<host>/<port>"`,一個位址一個結論。
+   - ⚠️ **禁止從一個失敗推廣到整個環境**。「`192.168.36.12` 不通」是事實;
+     「這個環境連不到內網」是推論 —— 2026-08-26 那次它剛好是**錯的**:同一個容器裡
+     `1.1.130.12`(登入用的那顆)連得好好的,而使用者被告知「應該無法登入」,
+     於是差點不會去試一個其實會成功的功能。
+   - 沒量就講,使用者會照著一個錯的結論做決定 —— 那比誠實說「這個我沒量過」糟得多。
+
 ---
 
 ## 核心原則
@@ -104,6 +120,8 @@
 | 規劃 / 審查 | 計畫模式、`/autoplan`、`/plan-eng-review` |
 | 前後端 / API 開發 | **plugin `feature-dev`(子代理唯讀)**:`code-explorer` 摸碼 / `code-architect` 出實作藍圖 / `code-reviewer` 審查;**實作落地用 `general-purpose`**(把 architect 的藍圖當自包含 brief)。整段也可在主對話用 `/feature-dev` slash command 跑 |
 | 資料庫設計 / migration | `db-design` |
+| **連公司 Oracle(查資料 / 驗連線)** | **`dbq`** —— `node /cf-shared/oracle/bin/dbq.mjs`(`--list` / `--test` / 直接下 SQL)。thick 模式、Instant Client 11.2、service↔SID 自動退回、`CURRENT_SCHEMA` 都已內建,**專案不用 `npm i`、不用寫 `initOracleClient`** |
+| **專案要連 Oracle(產連線層)** | **`dbq --scaffold`** —— 在專案根目錄跑一次:產 `oracle.ts`/`.mjs`、裝 `oracledb@^6.10.0`、補 `.cf/environment.json`、印出 Dockerfile 要加的行。已存在的檔不覆蓋。⚠️ **oracledb 一定要 6.x** —— 7.x 要 Oracle Client 19.1+(→ `DPI-1050`),而 IC 19 連公司這顆 11.2 的 TIPTOP 會 `ORA-28547`,**只有 6.x + IC 11.2 走得通**。細節見 `/cf-shared/oracle/README.md` |
 | 測試(含 **unit test**) | `/ship` Test Bootstrap(產 unit test + 覆蓋率)、`/qa`、`/verify`、`playwright`(E2E) |
 | UIUX / RWD 測試 | `/design-review`(有前端時;RWD、視覺層級、色彩對比、spacing、WCAG) |
 | **汰換重構的開案收料** | **`refactor-intake`**(逐支清點五類材料、缺料主動索取、產工單 manifest;manifest 與 `acceptance-report` 同格式,可一路用到驗收) |
